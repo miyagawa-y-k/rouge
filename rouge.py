@@ -1,13 +1,40 @@
-# ROUGE-Lの実装
+from collections import deque
+import spacy
+
+# ROUGE-L
 class ROUGEL():
-    def __init__(self, tokenizer):
-        # spacy
-        self.tokenizer = tokenizer
+    #
+    # init
+    #
+    def __init__(self):
+        self.tokenizer = spacy.load("ja_ginza")
         self.stopwords = ['\r\n', '\n', '\n\n', '。']
 
-    def sentences_split(self, sentence):
-        tokens = self.tokenizer(sentence)
-        token_queue = deque([token.text for token in tokens])
+    #
+    # Split the input sentence with a stopword and return sentece list.
+    #
+    def sentences_split(self, sentence: str) -> list:
+        token_queue = deque(list(sentence))
+        # return
+        sentences = []
+        sentence = ""
+        while token_queue:
+            token = token_queue.popleft()
+            if any([token == stopword for stopword in self.stopwords]):
+                if len(sentence):
+                    sentences.append(sentence)
+                sentence = ""
+            else:
+                sentence += token
+        if len(sentence):
+            sentences.append(sentence)
+        return sentences
+
+    #
+    # Splits the input a sentence and return token list.
+    #
+    def tokens_split(self, sentence: str) -> list:
+        token_queue = deque(self.tokens_split_(sentence=sentence))
         # return
         sentences = []
         sentence =[]
@@ -23,11 +50,17 @@ class ROUGEL():
             sentences.append(sentence)
         return sentences
 
-    def tokens_split(self, sentence=None):
+    # 
+    # Split the sentence and return token list.
+    #
+    def tokens_split_(self, sentence: str) -> list:
         tokens = self.tokenizer(sentence)
         return [token.text for token in tokens]
 
-    def lcs(self, summary=None, reference=None):
+    #
+    # Calcuate LCS
+    #
+    def lcs(self, summary:str, reference:str) -> int:
         # lcs
         dp = [[0] * (len(reference)+1) for _ in range(len(summary)+1)]
         for i, token_i in enumerate(summary):
@@ -38,28 +71,101 @@ class ROUGEL():
                     dp[i+1][j+1] = max(dp[i][j+1], dp[i+1][j])
         return dp[len(summary)][len(reference)]
 
-    def recall(self, summary=None, reference=None):
+    #
+    # Calcuate recall
+    #
+    def recall(self, summary:str, reference:str) -> float:
         lcs = self.lcs(summary, reference)
-        return lcs/len(reference)
+        return lcs/len(reference) if len(reference) else 0
     
-    def precision(self, summary=None, reference=None):
+    #
+    # Calcuate precision
+    #
+    def precision(self, summary:str, reference:str) -> float:
         lcs = self.lcs(summary, reference)
-        return lcs/len(summary)
+        return lcs/len(summary) if len(summary) else 0
+    
+# ROUGE-N
+class ROUGEN():
+    #
+    # init
+    #
+    def __init__(self, ngram:int = 1):
+        self.tokenizer = spacy.load("ja_ginza")
+        self.stopwords = ['\r\n', '\n', '\n\n', '。']
+        self.ngram = ngram
 
-    # 自分用
-    def eval_recall(self, summary=None, reference=None):
-        sumaries = self.sentences_split(summary)
-        ref_tokens = self.tokens_split(reference)
-        res = 0
-        for summary in sumaries:
-            res = max(res, self.recall(summary, ref_tokens))
+    #
+    # Split the input sentence with a stopword and return sentece list.
+    #
+    def sentences_split(self, sentence: str) -> list:
+        token_queue = deque(list(sentence))
+        # return
+        sentences = []
+        sentence = ""
+        while token_queue:
+            token = token_queue.popleft()
+            if any([token == stopword for stopword in self.stopwords]):
+                if len(sentence):
+                    sentences.append(sentence)
+                sentence = ""
+            else:
+                sentence += token
+        if len(sentence):
+            sentences.append(sentence)
+        return sentences
+
+    #
+    # Splits the input a sentence and return token list.
+    #
+    def tokens_split(self, sentence: str) -> list:
+        token_queue = deque(self.tokens_split_(sentence=sentence))
+        # return
+        sentences = []
+        sentence =[]
+        while token_queue:
+            token = token_queue.popleft()
+            if any([token == stopword for stopword in self.stopwords]):
+                if len(sentence):
+                    sentences.append(sentence)
+                sentence = []
+            else:
+                sentence.append(token)
+        if len(sentence):
+            sentences.append(sentence)
+        return sentences
+
+    # 
+    # Split the sentence and return token list.
+    #
+    def tokens_split_(self, sentence: str) -> list:
+        tokens = self.tokenizer(sentence)
+        res = []
+        for token_num in range(len(tokens)+1-self.ngram):
+            res.append(tokens[token_num:token_num+self.ngram])
         return res
 
-    # 自分用
-    def eval_precision(self, summary=None, reference=None):
-        sumaries = self.sentences_split(summary)
-        ref_tokens = self.tokens_split(reference)
-        res = 0
-        for summary in sumaries:
-            res = max(res, self.precision(summary, ref_tokens))
+    #
+    # Calcuate LCS
+    #
+    def calc_score(self, summary:str, reference:str) -> int:
+        res_set = set(list(map(lambda x: str(x), reference)))
+        sum_set = set(list(map(lambda x: str(x), summary)))
+        intersction_set = sum_set & res_set
+        res = len(intersction_set)
+        print(f"intersection:{intersction_set}")
         return res
+
+    #
+    # Calcuate recall
+    #
+    def recall(self, summary:str, reference:str) -> float:
+        match_ngram = self.calc_score(summary, reference)
+        return match_ngram/len(reference) if len(reference) else 0
+    
+    #
+    # Calcuate precision
+    #
+    def precision(self, summary:str, reference:str) -> float:
+        match_ngram = self.calc_score(summary, reference)
+        return match_ngram/len(summary) if len(summary) else 0
